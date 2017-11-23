@@ -85,7 +85,6 @@ def load_cifar10_dataset(cifar_dir, mode='supervised'):
     trX = trX.astype(np.float32) / 255.
     teX = teX.astype(np.float32) / 255.
 
-
     if mode == 'supervised':
         return trX, trY, teX, teY
 

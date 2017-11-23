@@ -86,6 +86,18 @@ def salt_and_pepper_noise(X, v):
     return X_noise
 
 
+def gaussian_noise(X, v):
+    X_noise = X.copy()
+
+    mean = 0
+    gaussian = np.random.normal(mean, v, X.shape)
+    row, col, ch = X.shape
+    gaussian = gaussian.reshape(row, col, ch)
+    X_noise = X_noise + gaussian
+
+    return X_noise
+
+
 def gen_image(img, width, height, outfile, img_type='grey'):
     assert len(img) == width * height or len(img) == width * height * 3
 

@@ -78,6 +78,8 @@ class DenoisingAutoencoder(object):
         self.tf_summary_writer = None
         self.tf_saver = None
 
+        self.old_err = 2000
+
     def fit(self, train_set, validation_set=None, restore_previous_model=False):
         """ Fit the model to the data.
 
@@ -133,11 +135,17 @@ class DenoisingAutoencoder(object):
 
             self._run_train_step(train_set, corruption_ratio)
 
-            if i % 5 == 0:
+            if i % 100 == 0:
                 self.tf_saver.save(self.tf_session, self.models_dir + self.model_name)
                 if validation_set is not None:
-                    self._run_validation_error_and_summaries(i, validation_set)
+                    err = self._run_validation_error_and_summaries(i, validation_set)
 
+                    if (self.old_err - err) < 0.00005:
+                        break
+
+                    self.old_err = err
+
+        self._run_validation_error_and_summaries(i, validation_set)
 
     def _run_train_step(self, train_set, corruption_ratio):
 
@@ -174,6 +182,9 @@ class DenoisingAutoencoder(object):
         elif self.corr_type == 'salt_and_pepper':
             x_corrupted = utils.salt_and_pepper_noise(data, v)
 
+        elif self.corr_type == 'gaussian':
+            x_corrupted = utils.gaussian_noise(data, v)
+
         elif self.corr_type == 'none':
             x_corrupted = data
 
@@ -201,6 +212,8 @@ class DenoisingAutoencoder(object):
 
         if self.verbose == 1:
             print("Validation cost at step %s: %s" % (epoch, err))
+
+        return err
 
     def _build_model(self, n_features):
         """ Creates the computational graph.
