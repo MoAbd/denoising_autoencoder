@@ -1,2 +1,2 @@
-model_checkpoint_path: "."
-all_model_checkpoint_paths: "."
+model_checkpoint_path: "model_sap_frac_0.5"
+all_model_checkpoint_paths: "model_sap_frac_0.5"
