@@ -2,7 +2,6 @@ import tensorflow as tf
 import numpy as np
 import os
 
-import zconfig
 import utils
 
 
@@ -13,25 +12,24 @@ class DenoisingAutoencoder(object):
     """
 
     def __init__(self, model_name='dae', n_components=256, main_dir='dae/', enc_act_func='tanh',
-                 dec_act_func='none', loss_func='mean_squared', num_epochs=10, batch_size=10, dataset='mnist',
+                 dec_act_func='none', loss_func='mean_squared', num_epochs=10, batch_size=10,
                  xavier_init=1, opt='gradient_descent', learning_rate=0.01, momentum=0.5, corr_type='none',
                  corr_frac=0., verbose=1, seed=-1):
         """
         :param main_dir: main directory to put the models, data and summary directories
         :param n_components: number of hidden units
-        :param enc_act_func: Activation function for the encoder. ['tanh', 'sigmoid']
-        :param dec_act_func: Activation function for the decoder. ['tanh', 'sigmoid']
+        :param enc_act_func: Activation function for the encoder. ['tanh', 'sigmoid', 'relu']
+        :param dec_act_func: Activation function for the decoder. ['tanh', 'sigmoid', 'relu', 'none']
         :param loss_func: Loss function. ['mean_squared', 'cross_entropy']
         :param xavier_init: Value of the constant for xavier weights initialization
-        :param opt: Which tensorflow optimizer to use. ['gradient_descent', 'momentum', 'ada_grad']
+        :param opt: Which tensorflow optimizer to use. ['gradient_descent', 'momentum', 'ada_grad', 'adam']
         :param learning_rate: Initial learning rate
         :param momentum: Momentum parameter
-        :param corr_type: Type of input corruption. ["none", "masking", "salt_and_pepper"]
+        :param corr_type: Type of input corruption. ["none", "masking", "salt_and_pepper", "gaussian"]
         :param corr_frac: Fraction of the input to corrupt.
         :param verbose: Level of verbosity. 0 - silent, 1 - print accuracy.
         :param num_epochs: Number of epochs
         :param batch_size: Size of each mini-batch
-        :param dataset: Optional name for the dataset.
         :param seed: positive integer for seeding random generators. Ignored if < 0.
         """
 
@@ -43,7 +41,6 @@ class DenoisingAutoencoder(object):
         self.loss_func = loss_func
         self.num_epochs = num_epochs
         self.batch_size = batch_size
-        self.dataset = dataset
         self.xavier_init = xavier_init
         self.opt = opt
         self.learning_rate = learning_rate
@@ -80,6 +77,84 @@ class DenoisingAutoencoder(object):
 
         self.old_err = 2000
 
+        self.build_mode()
+
+    """Build Model"""
+    def build_mode(self):
+        """ Creates the computational graph.
+
+        :return: self
+        """
+        n_features = 3072
+
+        self.input_data = tf.placeholder('float', [None, n_features], name='x-input')
+        self.input_data_corr = tf.placeholder('float', [None, n_features], name='x-corr-input')
+
+        self.W_ = tf.Variable(utils.xavier_init(n_features, self.n_components, self.xavier_init), name='enc-w')
+        self.bh_ = tf.Variable(tf.zeros([self.n_components]), name='hidden-bias')
+        self.bv_ = tf.Variable(tf.zeros([n_features]), name='visible-bias')
+
+        # Encode
+        with tf.name_scope("W_x_bh"):
+            if self.enc_act_func == 'sigmoid':
+                self.encode = tf.nn.sigmoid(tf.matmul(self.input_data_corr, self.W_) + self.bh_)
+
+            elif self.enc_act_func == 'tanh':
+                self.encode = tf.nn.tanh(tf.matmul(self.input_data_corr, self.W_) + self.bh_)
+
+            elif self.enc_act_func == 'relu':
+                self.encode = tf.nn.relu(tf.matmul(self.input_data_corr, self.W_) + self.bh_)
+            else:
+                self.encode = None
+
+        # Decode
+        with tf.name_scope("Wg_y_bv"):
+            if self.dec_act_func == 'sigmoid':
+                self.decode = tf.nn.sigmoid(tf.matmul(self.encode, tf.transpose(self.W_)) + self.bv_)
+
+            elif self.dec_act_func == 'tanh':
+                self.decode = tf.nn.tanh(tf.matmul(self.encode, tf.transpose(self.W_)) + self.bv_)
+
+            elif self.dec_act_func == 'relu':
+                self.decode = tf.nn.relu(tf.matmul(self.encode, tf.transpose(self.W_)) + self.bv_)
+
+            elif self.dec_act_func == 'none':
+                self.decode = tf.matmul(self.encode, tf.transpose(self.W_)) + self.bv_
+
+            else:
+                self.decode = None
+
+        # Cost Function
+        with tf.name_scope("cost"):
+            if self.loss_func == 'cross_entropy':
+                self.cost = - tf.reduce_sum(self.input_data * tf.log(self.decode))
+                _ = tf.summary.scalar("cross_entropy", self.cost)
+
+            elif self.loss_func == 'mean_squared':
+                self.cost = tf.sqrt(tf.reduce_mean(tf.square(self.input_data - self.decode)))
+                _ = tf.summary.scalar("mean_squared", self.cost)
+
+            else:
+                self.cost = None
+
+        # Train Step
+        with tf.name_scope("train"):
+            if self.opt == 'gradient_descent':
+                self.train_step = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.cost)
+
+            elif self.opt == 'ada_grad':
+                self.train_step = tf.train.AdagradOptimizer(self.learning_rate).minimize(self.cost)
+
+            elif self.opt == 'momentum':
+                self.train_step = tf.train.MomentumOptimizer(self.learning_rate, self.momentum).minimize(self.cost)
+
+            elif self.opt == 'adam':
+                self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.cost)
+
+            else:
+                self.train_step = None
+
+    """Train Model"""
     def fit(self, train_set, validation_set=None, restore_previous_model=False):
         """ Fit the model to the data.
 
@@ -91,9 +166,6 @@ class DenoisingAutoencoder(object):
 
         :return: self
         """
-        n_features = train_set.shape[1]
-
-        self._build_model(n_features)
 
         with tf.Session() as self.tf_session:
 
@@ -215,124 +287,6 @@ class DenoisingAutoencoder(object):
 
         return err
 
-    def _build_model(self, n_features):
-        """ Creates the computational graph.
-
-        :type n_features: int
-        :param n_features: Number of features.
-
-        :return: self
-        """
-
-        self.input_data, self.input_data_corr = self._create_placeholders(n_features)
-        self.W_, self.bh_, self.bv_ = self._create_variables(n_features)
-
-        self._create_encode_layer()
-        self._create_decode_layer()
-
-        self._create_cost_function_node()
-        self._create_train_step_node()
-
-    def _create_placeholders(self, n_features):
-
-        """ Create the TensorFlow placeholders for the model.
-
-        :return: tuple(input_data(shape(None, n_features)),
-                       input_data_corr(shape(None, n_features)))
-        """
-
-        input_data = tf.placeholder('float', [None, n_features], name='x-input')
-        input_data_corr = tf.placeholder('float', [None, n_features], name='x-corr-input')
-
-        return input_data, input_data_corr
-
-    def _create_variables(self, n_features):
-
-        """ Create the TensorFlow variables for the model.
-
-        :return: tuple(weights(shape(n_features, n_components)),
-                       hidden bias(shape(n_components)),
-                       visible bias(shape(n_features)))
-        """
-
-        W_ = tf.Variable(utils.xavier_init(n_features, self.n_components, self.xavier_init), name='enc-w')
-        bh_ = tf.Variable(tf.zeros([self.n_components]), name='hidden-bias')
-        bv_ = tf.Variable(tf.zeros([n_features]), name='visible-bias')
-
-        return W_, bh_, bv_
-
-    def _create_encode_layer(self):
-
-        """ Create the encoding layer of the network.
-        :return: self
-        """
-
-        with tf.name_scope("W_x_bh"):
-            if self.enc_act_func == 'sigmoid':
-                self.encode = tf.nn.sigmoid(tf.matmul(self.input_data_corr, self.W_) + self.bh_)
-
-            elif self.enc_act_func == 'tanh':
-                self.encode = tf.nn.tanh(tf.matmul(self.input_data_corr, self.W_) + self.bh_)
-
-            else:
-                self.encode = None
-
-    def _create_decode_layer(self):
-
-        """ Create the decoding layer of the network.
-        :return: self
-        """
-
-        with tf.name_scope("Wg_y_bv"):
-            if self.dec_act_func == 'sigmoid':
-                self.decode = tf.nn.sigmoid(tf.matmul(self.encode, tf.transpose(self.W_)) + self.bv_)
-
-            elif self.dec_act_func == 'tanh':
-                self.decode = tf.nn.tanh(tf.matmul(self.encode, tf.transpose(self.W_)) + self.bv_)
-
-            elif self.dec_act_func == 'none':
-                self.decode = tf.matmul(self.encode, tf.transpose(self.W_)) + self.bv_
-
-            else:
-                self.decode = None
-
-    def _create_cost_function_node(self):
-
-        """ create the cost function node of the network.
-        :return: self
-        """
-
-        with tf.name_scope("cost"):
-            if self.loss_func == 'cross_entropy':
-                self.cost = - tf.reduce_sum(self.input_data * tf.log(self.decode))
-                _ = tf.summary.scalar("cross_entropy", self.cost)
-
-            elif self.loss_func == 'mean_squared':
-                self.cost = tf.sqrt(tf.reduce_mean(tf.square(self.input_data - self.decode)))
-                _ = tf.summary.scalar("mean_squared", self.cost)
-
-            else:
-                self.cost = None
-
-    def _create_train_step_node(self):
-
-        """ create the training step node of the network.
-        :return: self
-        """
-
-        with tf.name_scope("train"):
-            if self.opt == 'gradient_descent':
-                self.train_step = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.cost)
-
-            elif self.opt == 'ada_grad':
-                self.train_step = tf.train.AdagradOptimizer(self.learning_rate).minimize(self.cost)
-
-            elif self.opt == 'momentum':
-                self.train_step = tf.train.MomentumOptimizer(self.learning_rate, self.momentum).minimize(self.cost)
-
-            else:
-                self.train_step = None
-
     def transform(self, data, name='train', save=False):
         """ Transform data according to the model.
 
@@ -366,7 +320,7 @@ class DenoisingAutoencoder(object):
         """
         self.n_components = shape[1]
 
-        self._build_model(shape[0])
+        self.build_mode(shape[0])
 
         init_op = tf.global_variables_initializer()
 
@@ -398,20 +352,20 @@ class DenoisingAutoencoder(object):
         """ Create the three directories for storing respectively the models,
         the data generated by training and the TensorFlow's summaries.
 
-        :return: tuple of strings(models_dir, data_dir, summary_dir)
+        :return: tuple of strings(models_dir, data_dir, logs_dir)
         """
 
         self.main_dir = self.main_dir + '/' if self.main_dir[-1] != '/' else self.main_dir
 
-        models_dir = zconfig.models_dir + self.main_dir
-        data_dir = zconfig.data_dir + self.main_dir
-        summary_dir = zconfig.summary_dir + self.main_dir
+        models_dir = 'models/' + self.main_dir
+        data_dir = 'data/' + self.main_dir
+        logs_dir = 'logs/' + self.main_dir
 
-        for d in [models_dir, data_dir, summary_dir]:
+        for d in [models_dir, data_dir, logs_dir]:
             if not os.path.isdir(d):
                 os.mkdir(d)
 
-        return models_dir, data_dir, summary_dir
+        return models_dir, data_dir, logs_dir
 
     def get_weights_as_images(self, width, height, outdir='img/', max_images=10, model_path=None):
         """ Save the weights of this autoencoder as images, one image per hidden unit.
