@@ -4,90 +4,45 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from tensorflow.examples.tutorials.mnist import input_data
-
 import pickle
-
 
 import numpy as np
 import os
 
-
-def load_mnist_dataset(mode='supervised', one_hot=True):
-    """Load the MNIST handwritten digits dataset.
-
-    :param mode: 'supervised' or 'unsupervised' mode
-    :param one_hot: whether to get one hot encoded labels
-    :return: train, validation, test data:
-            for (X, y) if 'supervised',
-            for (X) if 'unsupervised'
-    """
-    mnist = input_data.read_data_sets("MNIST_data/", one_hot=one_hot)
-
-    # Training set
-    trX = mnist.train.images
-    trY = mnist.train.labels
-
-    # Validation set
-    vlX = mnist.validation.images
-    vlY = mnist.validation.labels
-
-    # Test set
-    teX = mnist.test.images
-    teY = mnist.test.labels
-
-    if mode == 'supervised':
-        return trX, trY, vlX, vlY, teX, teY
-
-    elif mode == 'unsupervised':
-        return trX, vlX, teX
+data_dir = 'cifar-10-batches-py'
 
 
-def load_cifar10_dataset(cifar_dir, mode='supervised'):
+def load_cifar10_dataset():
     """Load the cifar10 dataset.
 
-    :param cifar_dir: path to the dataset directory
-        (cPicle format from: https://www.cs.toronto.edu/~kriz/cifar.html)
-    :param mode: 'supervised' or 'unsupervised' mode
-
     :return: train, test data:
-            for (X, y) if 'supervised',
-            for (X) if 'unsupervised'
+            for (X)
     """
     # Training set
-    trX = None
-    trY = np.array([])
+    training_x = None
 
     # Test set
-    teX = np.array([])
-    teY = np.array([])
+    testing_x = np.array([])
 
-    for fn in os.listdir(cifar_dir):
+    for fn in os.listdir(data_dir):
 
         if not fn.startswith('batches') and not fn.startswith('readme'):
-            fo = open(os.path.join(cifar_dir, fn), 'rb')
+            fo = open(os.path.join(data_dir, fn), 'rb')
             data_batch = pickle.load(fo, encoding='latin1')
             fo.close()
 
             if fn.startswith('data'):
 
-                if trX is None:
-                    trX = data_batch['data']
-                    trY = data_batch['labels']
+                if training_x is None:
+                    training_x = data_batch['data']
                 else:
-                    trX = np.concatenate((trX, data_batch['data']), axis=0)
-                    trY = np.concatenate((trY, data_batch['labels']), axis=0)
+                    training_x = np.concatenate((training_x, data_batch['data']), axis=0)
 
             if fn.startswith('test'):
-                teX = data_batch['data']
-                teY = data_batch['labels']
+                testing_x = data_batch['data']
 
-    trX = trX.astype(np.float32) / 255.
-    teX = teX.astype(np.float32) / 255.
+    training_x = training_x.astype(np.float32) / 255.0
+    testing_x = testing_x.astype(np.float32) / 255.0
 
-    if mode == 'supervised':
-        return trX, trY, teX, teY
-
-    elif mode == 'unsupervised':
-        return trX, teX
+    return training_x, testing_x
 
