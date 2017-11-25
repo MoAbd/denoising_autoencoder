@@ -89,11 +89,12 @@ def salt_and_pepper_noise(X, v):
 def gaussian_noise(X, v):
     X_noise = X.copy()
 
-    mean = 0
-    gaussian = np.random.normal(mean, v, X.shape)
-    row, col, ch = X.shape
-    gaussian = gaussian.reshape(row, col, ch)
-    X_noise = X_noise + gaussian
+    for i, sample in enumerate(X):
+        mean = 0
+        gaussian = np.random.normal(mean, v, (3, 32, 32))
+        gaussian = gaussian.reshape(3072)
+
+        X_noise[i] = (X_noise[i] + gaussian) - np.floor(X_noise[i] + gaussian)
 
     return X_noise
 
