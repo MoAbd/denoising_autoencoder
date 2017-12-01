@@ -55,7 +55,7 @@ class StackedDenoisingAutoencoder:
 
         # Flat Pool Encoding
         self.flat_pool = tf.reshape(
-            tf.nn.max_pool(self.encode, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME'), [samples, n_features]
+            tf.nn.max_pool(self.encode, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME'), [samples, 8192]
         )
 
         # Decode
@@ -89,7 +89,7 @@ class StackedDenoisingAutoencoder:
 
         # Pool Encoding
         self.flat_pool = tf.reshape(
-            tf.nn.max_pool(self.encode, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME'), [samples, n_features]
+            tf.nn.max_pool(self.encode, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME'), [samples, 4096]
         )
 
         # Decode
@@ -137,8 +137,8 @@ class StackedDenoisingAutoencoder:
             print("Validation cost is {}".format(error))
 
         # Save the model
-        saver = tf.train.Saver()
-        saver.save(sess, 'SDAE_model2')
+        #saver = tf.train.Saver()
+        #saver.save(sess, 'SDAE_model2')
 
     def corrupt_input(self, data, v):
 
@@ -162,6 +162,7 @@ class StackedDenoisingAutoencoder:
     def transform(self, x, model_name):
         # load saved model
         sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
         saver = tf.train.import_meta_graph(model_name)
         saver.restore(sess, tf.train.latest_checkpoint('./'))
 
@@ -173,10 +174,9 @@ class StackedDenoisingAutoencoder:
     def save_weights(self, x, model_name):
         # load saved model
         sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
         saver = tf.train.import_meta_graph(model_name)
         saver.restore(sess, tf.train.latest_checkpoint('./'))
 
         weights, biases = sess.run([self.weights, self.biases], feed_dict={self.input_data: x, self.corrupted_input_data: x})
-
-        # saver = tf.train.Saver({"weights": self.weights, "biases": self.biases})
         return weights, biases

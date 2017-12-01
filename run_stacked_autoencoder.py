@@ -17,7 +17,7 @@ flags.DEFINE_float('corruption_fraction', 0.1, 'Fraction of the input to corrupt
 flags.DEFINE_float('weight_stddev', 0.01, 'Weight initialization standard deviation')
 flags.DEFINE_float('bias_init', 0.1, 'Bias initialization')
 flags.DEFINE_float('learning_rate', 0.000002, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 60, 'Number of epochs.')
+flags.DEFINE_integer('epochs', 1, 'Number of epochs.')
 flags.DEFINE_integer('batch_size', 25, 'Size of each mini-batch.')
 
 assert FLAGS.corruption_type in ['masking', 'salt_and_pepper', 'gaussian', 'none']
@@ -44,7 +44,7 @@ def main():
                                                            batch_size=FLAGS.batch_size)
 
     print("Training")
-    sdae.train(training_x, validation_x)
+    #sdae.train(training_x, validation_x)
 
     print("Transforming")
     pool = sdae.transform(all_x, "SDAE_model2.meta")
