@@ -4,7 +4,7 @@ import numpy as np
 import utils
 
 
-class StackedDenoisingAutoencoder():
+class StackedDenoisingAutoencoder:
     """
     Implementation of a stacked denoising autoencoder using tensorflow
     """
@@ -29,116 +29,116 @@ class StackedDenoisingAutoencoder():
         self.weights = None
         self.biases = None
         self.encode = None
-        self.pool = None
+        self.flat_pool = None
         self.decode = None
         self.cost = None
         self.train_step = None
 
         # Build the model
-        self.build_model()
+        self.build_model2()
 
     def build_model(self):
-        n_features = 3072
-
-        self.input_data = tf.placeholder(tf.float32, shape=[None, n_features])
-        self.corrupted_input_data = tf.placeholder(tf.float32, shape=[None, n_features])
-        corrupted_image = tf.reshape(self.corrupted_input_data, [-1, 32, 32, 3])
-
         self.weights = tf.Variable(tf.truncated_normal([5, 5, 3, 32], stddev=self.weight_stddev))
         self.biases = tf.Variable(tf.constant(self.bias_init, shape=[32]))
 
-        # Encode
-        with tf.name_scope("Encode"):
-            self.encode = tf.nn.relu(
-                tf.nn.conv2d(corrupted_image, self.weights, strides=[1, 1, 1, 1], padding='SAME') + self.biases
-            )
-
-        # Pool Encoding
-        self.pool = tf.nn.max_pool(self.encode, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-
-        # Decode
-        with tf.name_scope("Decode"):
-            self.decode = tf.nn.conv2d_transpose(self.encode, self.weights, output_shape=[-1, 32, 32, 3],
-                                                 strides=[1, 1, 1, 1])
-
-        # Flatten
-        flat_decode = tf.reshape(self.decode, [-1, 3072])
-
-        # Cost
-        with tf.name_scope("Cost_Function"):
-            self.cost = tf.sqrt(tf.reduce_mean(tf.square(self.input_data - flat_decode)))
-            # _ = tf.summary.scalar("mean_squared", self.cost)  # TODO: do i need this?
-
-        # Optimizer
-        with tf.name_scope("Optimizer"):
-            self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.cost)
-
-    """
-    def build_model2(self):
-        n_features = ???
+        n_features = 3072
 
         self.input_data = tf.placeholder(tf.float32, shape=[None, n_features])
+        samples = tf.shape(self.input_data)[0]
         self.corrupted_input_data = tf.placeholder(tf.float32, shape=[None, n_features])
-        corrupted_image = tf.reshape(self.corrupted_input_data, [-1, 32, 32, 3])  # TODO: match previous layer
+        corrupted_image = tf.reshape(self.corrupted_input_data, [samples, 32, 32, 3])
 
+        # Encode
+        self.encode = tf.nn.relu(
+            tf.nn.conv2d(corrupted_image, self.weights, strides=[1, 1, 1, 1], padding='SAME') + self.biases
+        )
+
+        # Flat Pool Encoding
+        self.flat_pool = tf.reshape(
+            tf.nn.max_pool(self.encode, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME'), [samples, n_features]
+        )
+
+        # Decode
+        self.decode = tf.nn.conv2d_transpose(self.encode, self.weights, output_shape=[samples, 32, 32, 3],
+                                             strides=[1, 1, 1, 1])
+
+        # Flatten
+        flat_decode = tf.reshape(self.decode, [samples, n_features])
+
+        # Cost
+        self.cost = tf.sqrt(tf.reduce_mean(tf.square(self.input_data - flat_decode)))
+
+        # Optimizer
+        self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.cost)
+
+    def build_model2(self):
         self.weights = tf.Variable(tf.truncated_normal([5, 5, 32, 64], stddev=self.weight_stddev))
         self.biases = tf.Variable(tf.constant(self.bias_init, shape=[64]))
 
+        n_features = 8192
+
+        self.input_data = tf.placeholder(tf.float32, shape=[None, n_features])
+        samples = tf.shape(self.input_data)[0]
+        self.corrupted_input_data = tf.placeholder(tf.float32, shape=[None, n_features])
+        corrupted_image = tf.reshape(self.corrupted_input_data, [samples, 16, 16, 32])
+
         # Encode
-        with tf.name_scope("Encode"):
-            self.encode = tf.nn.relu(
-                tf.nn.conv2d(corrupted_image, self.weights, strides=[1, 1, 1, 1], padding='SAME') + self.biases
-            )
+        self.encode = tf.nn.relu(
+            tf.nn.conv2d(corrupted_image, self.weights, strides=[1, 1, 1, 1], padding='SAME') + self.biases
+        )
 
         # Pool Encoding
-        self.pool = tf.nn.max_pool(self.encode, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+        self.flat_pool = tf.reshape(
+            tf.nn.max_pool(self.encode, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME'), [samples, n_features]
+        )
 
         # Decode
-        with tf.name_scope("Decode"):
-            self.decode = tf.nn.conv2d_transpose(self.encode, self.weights, output_shape=[-1, 32, 32, 3],  # TODO: match previous layer
-                                                 strides=[1, 1, 1, 1])
+        self.decode = tf.nn.conv2d_transpose(self.encode, self.weights, output_shape=[samples, 16, 16, 32],
+                                             strides=[1, 1, 1, 1])
 
-        # TODO: Flatten before comparing with input data
+        # Flatten
+        flat_decode = tf.reshape(self.decode, [samples, n_features])
 
         # Cost
-        with tf.name_scope("Cost_Function"):
-            self.cost = tf.sqrt(tf.reduce_mean(tf.square(self.input_data - self.decode)))
-            _ = tf.summary.scalar("mean_squared", self.cost)  # TODO: do i need this?
+        self.cost = tf.sqrt(tf.reduce_mean(tf.square(self.input_data - flat_decode)))
 
         # Optimizer
-        with tf.name_scope("Optimizer"):
-            self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.cost)
-    """
+        self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.cost)
 
     def train(self, training_x, validation_x):
-        with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
+        sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
 
-            corruption_ratio = np.round(self.corruption_fraction * training_x.shape[1]).astype(np.int)
-            for epoch in range(self.epochs):
-                print("Epoch: {}".format(epoch))
+        corruption_ratio = np.round(self.corruption_fraction * training_x.shape[1]).astype(np.int)
+        for epoch in range(self.epochs):
+            print("Epoch: {}".format(epoch))
 
-                x_corrupted = self.corrupt_input(training_x, corruption_ratio)
+            x_corrupted = self.corrupt_input(training_x, corruption_ratio)
 
-                shuff = list(zip(training_x, x_corrupted))
-                np.random.shuffle(shuff)
+            shuff = list(zip(training_x, x_corrupted))
+            np.random.shuffle(shuff)
 
-                batches = [_ for _ in utils.gen_batches(shuff, self.batch_size)]
+            batches = [_ for _ in utils.gen_batches(shuff, self.batch_size)]
 
-                for batch in batches:
-                    x_batch, x_corrupted_batch = zip(*batch)
-                    sess.run(self.train_step, feed_dict={self.input_data: x_batch,
-                                                         self.corrupted_input_data: x_corrupted_batch})
+            for batch in batches:
+                x_batch, x_corrupted_batch = zip(*batch)
+                sess.run(self.train_step, feed_dict={self.input_data: x_batch,
+                                                     self.corrupted_input_data: x_corrupted_batch})
 
-                if epoch % 50 == 0:
-                    if validation_x is not None:
-                        error = sess.run(self.cost, feed_dict={self.input_data: validation_x,
-                                                               self.corrupted_input_data: validation_x})
-                        print("Validation cost is {}".format(error))
+            if epoch % 5 == 0:
+                if validation_x is not None:
+                    error = sess.run(self.cost, feed_dict={self.input_data: validation_x,
+                                                           self.corrupted_input_data: validation_x})
+                    print("Validation cost is {}".format(error))
 
-            # Save the model
-            saver = tf.train.Saver()
-            saver.save(sess, 'SDAE_model', global_step=self.epochs)
+        if validation_x is not None:
+            error = sess.run(self.cost, feed_dict={self.input_data: validation_x,
+                                                   self.corrupted_input_data: validation_x})
+            print("Validation cost is {}".format(error))
+
+        # Save the model
+        saver = tf.train.Saver()
+        saver.save(sess, 'SDAE_model2')
 
     def corrupt_input(self, data, v):
 
@@ -159,13 +159,24 @@ class StackedDenoisingAutoencoder():
 
         return x_corrupted
 
-    def transform(self):
-        # TODO: load saved model
-        # TODO: Run against some data until pooling step
-        # TODO: return for saving
-        return
+    def transform(self, x, model_name):
+        # load saved model
+        sess = tf.Session()
+        saver = tf.train.import_meta_graph(model_name)
+        saver.restore(sess, tf.train.latest_checkpoint('./'))
 
-    def save_weights(self):
-        # TODO: load saved model
-        # TODO: save the weights and biases to a specific location
-        return
+        # Run against some data until pooling step
+        pool = sess.run(self.flat_pool, feed_dict={self.input_data: x, self.corrupted_input_data: x})
+
+        return pool
+
+    def save_weights(self, x, model_name):
+        # load saved model
+        sess = tf.Session()
+        saver = tf.train.import_meta_graph(model_name)
+        saver.restore(sess, tf.train.latest_checkpoint('./'))
+
+        weights, biases = sess.run([self.weights, self.biases], feed_dict={self.input_data: x, self.corrupted_input_data: x})
+
+        # saver = tf.train.Saver({"weights": self.weights, "biases": self.biases})
+        return weights, biases
