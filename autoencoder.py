@@ -303,12 +303,12 @@ class DenoisingAutoencoder(object):
 
             encoded_data = self.encode.eval({self.input_data_corr: data})
 
-            decoded_data = self.decode.eval({self.encode: encoded_data})
+            decoded_data = self.decode.eval({self.input_data_corr: data})
 
             if save:
                 np.save(self.data_dir + self.model_name + '-' + name, encoded_data)
 
-            return decoded_data
+            return encoded_data, decoded_data
 
     def load_model(self, shape, model_path):
         """ Restore a previously trained model from disk.
